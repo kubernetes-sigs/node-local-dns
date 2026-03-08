@@ -22,7 +22,6 @@ PKG := k8s.io/dns
 # List of binaries to build that are containerized and pushed.
 # You must have a matching Dockerfile.BINARY for each BINARY.
 CONTAINER_BINARIES := \
-    kube-dns \
     node-cache
 
 # List of images to build (contained in images/)

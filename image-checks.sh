@@ -8,5 +8,3 @@ echo "Verifying that iptables exists in node-cache image"
 docker run --rm -it --entrypoint=iptables ${REGISTRY}/k8s-dns-node-cache:${TAG}
 echo "Verifying that node-cache binary exists in node-cache image"
 docker run --rm -it --entrypoint=/node-cache ${REGISTRY}/k8s-dns-node-cache:${TAG}
-echo "Verifying kube-dns startup"
-docker run --rm -it --entrypoint=/kube-dns ${REGISTRY}/k8s-dns-kube-dns:${TAG}

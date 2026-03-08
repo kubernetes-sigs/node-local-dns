@@ -25,7 +25,6 @@ import (
 	types "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	fed "k8s.io/dns/pkg/dns/federation"
 	"k8s.io/dns/pkg/dns/util"
 )
 
@@ -40,10 +39,6 @@ type Config struct {
 	// command-line flags, config-map, etc mechanisms.
 	types.TypeMeta
 
-	// Map of federation names that the cluster in which this kube-dns
-	// is running belongs to, to the corresponding domain names.
-	Federations map[string]string `json:"federations"`
-
 	// Map of stub domain to nameserver IP. The key is the domain name suffix,
 	// e.g. "acme.local". Key cannot be equal to the cluster domain. Value is
 	// the IP of the nameserver to send DNS request for the given subdomain.
@@ -56,17 +51,12 @@ type Config struct {
 
 func NewDefaultConfig() *Config {
 	return &Config{
-		Federations: map[string]string{},
 		StubDomains: map[string][]string{},
 	}
 }
 
 // Validate returns whether or not the configuration is valid.
 func (config *Config) Validate() error {
-	if err := config.validateFederations(); err != nil {
-		return err
-	}
-
 	if err := config.validateStubDomains(); err != nil {
 		return err
 	}
@@ -75,18 +65,6 @@ func (config *Config) Validate() error {
 		return err
 	}
 
-	return nil
-}
-
-func (config *Config) validateFederations() error {
-	for name, domain := range config.Federations {
-		if err := fed.ValidateName(name); err != nil {
-			return err
-		}
-		if err := fed.ValidateDomain(domain); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 

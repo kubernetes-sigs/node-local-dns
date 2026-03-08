@@ -19,7 +19,6 @@ package config
 import (
 	"encoding/json"
 
-	fed "k8s.io/dns/pkg/dns/federation"
 	"k8s.io/klog/v2"
 )
 
@@ -119,7 +118,6 @@ func (sync *kubeSync) processUpdate(result syncResult, buildUnchangedConfig bool
 	config = &Config{}
 
 	for key, updateFn := range map[string]fieldUpdateFn{
-		"federations":         updateFederations,
 		"stubDomains":         updateStubDomains,
 		"upstreamNameservers": updateUpstreamNameservers,
 	} {
@@ -145,17 +143,6 @@ func (sync *kubeSync) processUpdate(result syncResult, buildUnchangedConfig bool
 }
 
 type fieldUpdateFn func(key string, data string, config *Config) error
-
-func updateFederations(key string, value string, config *Config) error {
-	config.Federations = make(map[string]string)
-	if err := fed.ParseFederationsFlag(value, config.Federations); err != nil {
-		klog.Errorf("Invalid federations value: %v (value was %q)", err, value)
-		return err
-	}
-	klog.V(2).Infof("Updated %v to %v", key, config.Federations)
-
-	return nil
-}
 
 func updateStubDomains(key string, value string, config *Config) error {
 	config.StubDomains = make(map[string][]string)

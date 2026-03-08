@@ -25,8 +25,6 @@ import (
 func TestValidate(t *testing.T) {
 	// valid
 	for _, testCase := range []Config{
-		{Federations: map[string]string{}},
-		{Federations: map[string]string{"abc": "d.e.f"}},
 		{StubDomains: map[string][]string{}},
 		{StubDomains: map[string][]string{"foo.com": []string{"1.2.3.4"}}},
 		{StubDomains: map[string][]string{"foo.com": []string{"1.2.3.4:32564"}}},
@@ -52,7 +50,6 @@ func TestValidate(t *testing.T) {
 
 	// invalid
 	for _, testCase := range []Config{
-		{Federations: map[string]string{"a.b": "cdef"}},
 		{StubDomains: map[string][]string{"": []string{"1.2.3.4"}}},
 		{StubDomains: map[string][]string{"$$$$": []string{"1.2.3.4"}}},
 		{StubDomains: map[string][]string{"foo": []string{"$$$$"}}},
