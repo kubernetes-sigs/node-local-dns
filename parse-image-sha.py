@@ -22,7 +22,7 @@ import json
 import subprocess
 
 REGISTRY = "gcr.io/k8s-staging-dns"
-MANIFESTS = ["k8s-dns-dnsmasq-nanny", "k8s-dns-kube-dns", "k8s-dns-sidecar", "k8s-dns-node-cache"]
+MANIFESTS = ["k8s-dns-dnsmasq-nanny", "k8s-dns-kube-dns", "k8s-dns-node-cache"]
 TAG_NAME = "1.21.1"
 
 

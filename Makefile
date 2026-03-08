@@ -24,8 +24,7 @@ PKG := k8s.io/dns
 CONTAINER_BINARIES := \
     dnsmasq-nanny \
     kube-dns \
-    node-cache \
-    sidecar
+    node-cache
 
 # List of images to build (contained in images/)
 IMAGES := dnsmasq

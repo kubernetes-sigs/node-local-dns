@@ -2,7 +2,6 @@
 # This script runs some very basic commands to ensure that the newly build
 # images are working correctly. Invoke as:
 # ./image-checks.sh <image-tag> <registry-name>
-# Kill with Ctrl + C once sidecar starts up successfully.
 TAG=$1
 REGISTRY=${2:-registry.k8s.io/dns}
 echo "Verifying that iptables exists in node-cache image"
@@ -13,5 +12,3 @@ echo "Verifying dnsmasq-nanny startup"
 docker run --rm -it --entrypoint=/dnsmasq-nanny ${REGISTRY}/k8s-dns-dnsmasq-nanny:${TAG}
 echo "Verifying kube-dns startup"
 docker run --rm -it --entrypoint=/kube-dns ${REGISTRY}/k8s-dns-kube-dns:${TAG}
-echo "Verifying sidecar startup"
-docker run --rm -it --entrypoint=/sidecar ${REGISTRY}/k8s-dns-sidecar:${TAG}
