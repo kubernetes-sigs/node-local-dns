@@ -23,7 +23,6 @@ import (
 	"github.com/coredns/coredns/coremain"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 
-	"k8s.io/dns/cmd/kube-dns/app/options"
 	"k8s.io/dns/pkg/dns/config"
 	"k8s.io/dns/pkg/netif"
 	utiliptables "k8s.io/kubernetes/pkg/util/iptables"
@@ -67,7 +66,7 @@ type CacheApp struct {
 	iptablesRules []iptablesRule
 	params        *ConfigParams
 	netifHandle   *netif.NetifManager
-	kubednsConfig *options.KubeDNSConfig
+	config        *NodeCacheConfig
 	exitChan      chan struct{} // Channel to terminate background goroutines
 	clusterDNSIP  net.IP
 	selfProcess   *os.Process
@@ -277,7 +276,7 @@ func (c *CacheApp) RunApp() {
 
 // NewCacheApp returns a new instance of CacheApp by applying the specified config params.
 func NewCacheApp(params *ConfigParams) (*CacheApp, error) {
-	c := &CacheApp{params: params, kubednsConfig: options.NewKubeDNSConfig()}
+	c := &CacheApp{params: params, config: NewNodeCacheConfig()}
 	if params.ReloadWithSignal {
 		var err error
 		c.selfProcess, err = os.FindProcess(os.Getpid())

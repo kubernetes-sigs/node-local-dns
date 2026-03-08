@@ -183,10 +183,10 @@ func (c *CacheApp) initDNSConfigSync() {
 	}
 
 	if c.params.KubednsCMPath != "" {
-		c.kubednsConfig.ConfigDir = c.params.KubednsCMPath
+		c.config.ConfigDir = c.params.KubednsCMPath
 		syncList = append(syncList, &syncInfo{configName: "kube-dns",
-			filePath:   c.kubednsConfig.ConfigDir,
-			period:     c.kubednsConfig.ConfigPeriod,
+			filePath:   c.config.ConfigDir,
+			period:     c.config.ConfigPeriod,
 			updateFunc: c.updateCorefile,
 			chanAddr:   &kubeDNSChan,
 		})
