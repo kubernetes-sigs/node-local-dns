@@ -48,3 +48,17 @@ if [ -n "${ERRS}" ]; then
 fi
 echo "PASS"
 echo
+
+echo -n "Checking go mod tidy: "
+go mod tidy 2>&1
+ERRS=$(git diff --name-only go.mod go.sum 2>&1 || true)
+if [ -n "${ERRS}" ]; then
+    echo "FAIL - the following files are out of date:"
+    for e in ${ERRS}; do
+        echo "    $e"
+    done
+    echo
+    exit 1
+fi
+echo "PASS"
+echo
