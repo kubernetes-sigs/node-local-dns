@@ -39,7 +39,7 @@ cluster.local:53 {
     forward . __PILLAR__CLUSTER__DNS__ {
             force_tcp
     }
-    prometheus :9253
+    prometheus __PILLAR__PROMETHEUS__ENDPOINT__
     }
 .:53 {
     errors
@@ -50,7 +50,7 @@ cluster.local:53 {
     forward . __PILLAR__UPSTREAM__SERVERS__ {
             force_tcp
     }
-    prometheus :9253
+    prometheus __PILLAR__PROMETHEUS__ENDPOINT__
     }
 `
 	templateCoreFileName   = "testCoreFile.base"
@@ -139,12 +139,13 @@ func TestUpdateCoreFile(t *testing.T) {
 	envName := strings.ToUpper(strings.Replace(UpstreamClusterDNS, "-", "_", -1)) + "_SERVICE_HOST"
 	os.Setenv(envName, "9.10.11.12")
 	c, err := NewCacheApp(&ConfigParams{LocalIPStr: "169.254.20.10,10.0.0.10",
-		LocalPort:       "53",
-		BaseCoreFile:    filepath.Join(baseDir, templateCoreFileName),
-		CoreFile:        filepath.Join(baseDir, coreFileName),
-		KubednsCMPath:   filepath.Join(baseDir, cmDirName),
-		UpstreamSvcName: UpstreamClusterDNS,
-		SetupIptables:   false,
+		LocalPort:               "53",
+		BaseCoreFile:            filepath.Join(baseDir, templateCoreFileName),
+		CoreFile:                filepath.Join(baseDir, coreFileName),
+		KubednsCMPath:           filepath.Join(baseDir, cmDirName),
+		UpstreamSvcName:         UpstreamClusterDNS,
+		SetupIptables:           false,
+		PrometheusListenAddress: ":9253",
 	})
 	if err != nil {
 		t.Fatalf("Failed to obtain CacheApp instance, err %v", err)
@@ -156,7 +157,8 @@ func TestUpdateCoreFile(t *testing.T) {
 	r := strings.NewReplacer(LocalListenIPsVar, listenIPs,
 		UpstreamClusterDNSVar, "9.10.11.12",
 		UpstreamServerVar, "/etc/resolv.conf",
-		LocalDNSServerVar, "")
+		LocalDNSServerVar, "",
+		PrometheusEndpointVar, ":9253")
 	expectedContents := r.Replace(templateCoreFileContents)
 	if out, diff := compareFileContents(c.params.CoreFile, expectedContents, t); diff != 0 {
 		t.Errorf("Expected contents '%s', Got '%s'", expectedContents, out)
@@ -187,7 +189,8 @@ func TestUpdateCoreFile(t *testing.T) {
 	r = strings.NewReplacer(LocalListenIPsVar, listenIPs,
 		UpstreamClusterDNSVar, "9.10.11.12",
 		LocalDNSServerVar, "",
-		upstreamTCPBlock, upstreamUDP)
+		upstreamTCPBlock, upstreamUDP,
+		PrometheusEndpointVar, ":9253")
 	expectedContents = r.Replace(newTemplateContents)
 	expectedStubStr := getStubDomainStr(customConfig.StubDomains, &stubDomainInfo{Port: c.params.LocalPort, CacheTTL: defaultTTL,
 		LocalIP: strings.Replace(c.params.LocalIPStr, ",", " ", -1)})
@@ -211,12 +214,13 @@ func TestUpdateIPv6CoreFile(t *testing.T) {
 	envName := strings.ToUpper(strings.Replace(UpstreamClusterDNS, "-", "_", -1)) + "_SERVICE_HOST"
 	os.Setenv(envName, "2001:db8::1")
 	c, err := NewCacheApp(&ConfigParams{LocalIPStr: "fe80:169:254::1,fd00:1:2:3::5",
-		LocalPort:       "53",
-		BaseCoreFile:    filepath.Join(baseDir, templateCoreFileName),
-		CoreFile:        filepath.Join(baseDir, coreFileName),
-		KubednsCMPath:   filepath.Join(baseDir, cmDirName),
-		UpstreamSvcName: UpstreamClusterDNS,
-		SetupIptables:   false,
+		LocalPort:               "53",
+		BaseCoreFile:            filepath.Join(baseDir, templateCoreFileName),
+		CoreFile:                filepath.Join(baseDir, coreFileName),
+		KubednsCMPath:           filepath.Join(baseDir, cmDirName),
+		UpstreamSvcName:         UpstreamClusterDNS,
+		SetupIptables:           false,
+		PrometheusListenAddress: ":9253",
 	})
 	if err != nil {
 		t.Fatalf("Failed to obtain CacheApp instance, err %v", err)
@@ -228,7 +232,8 @@ func TestUpdateIPv6CoreFile(t *testing.T) {
 	r := strings.NewReplacer(LocalListenIPsVar, listenIPs,
 		UpstreamClusterDNSVar, "2001:db8::1",
 		UpstreamServerVar, "/etc/resolv.conf",
-		LocalDNSServerVar, "")
+		LocalDNSServerVar, "",
+		PrometheusEndpointVar, ":9253")
 	expectedContents := r.Replace(templateCoreFileContents)
 	if out, diff := compareFileContents(c.params.CoreFile, expectedContents, t); diff != 0 {
 		t.Errorf("Expected contents '%s', Got '%s'", expectedContents, out)
@@ -259,7 +264,8 @@ func TestUpdateIPv6CoreFile(t *testing.T) {
 	r = strings.NewReplacer(LocalListenIPsVar, listenIPs,
 		UpstreamClusterDNSVar, "2001:db8::1",
 		LocalDNSServerVar, "",
-		upstreamTCPBlock, upstreamUDP)
+		upstreamTCPBlock, upstreamUDP,
+		PrometheusEndpointVar, ":9253")
 	expectedContents = r.Replace(newTemplateContents)
 	expectedStubStr := getStubDomainStr(customConfig.StubDomains, &stubDomainInfo{Port: c.params.LocalPort, CacheTTL: defaultTTL,
 		LocalIP: strings.Replace(c.params.LocalIPStr, ",", " ", -1)})
