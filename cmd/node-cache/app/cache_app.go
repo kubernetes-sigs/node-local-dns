@@ -20,8 +20,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/coredns/coredns/coremain"
 	"github.com/coredns/coredns/core/dnsserver"
+	"github.com/coredns/coredns/coremain"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 
 	utiliptables "k8s.io/kubernetes/pkg/util/iptables"
