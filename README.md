@@ -6,21 +6,22 @@ This is the repository for [Kubernetes Node-Local DNS Cache](https://kubernetes.
 
 `make` targets:
 
-| target | description |
-| ---- | ---- |
-|all, build   | build all binaries |
-|test         | run unit tests |
-|containers   | build the containers |
-|images-clean | clear image build artifacts from workdir |
-|push         | push containers to the registry |
-|help         | this help message |
-|version      | show package version |
-|{build,containers,push}-ARCH | do action for specific ARCH |
-|all-{build,containers,push}  | do action for all ARCH |
-|only-push-BINARY             | push just BINARY |
+| target                       | description                              |
+| ---------------------------- | ---------------------------------------- |
+| all, build                   | build all binaries                       |
+| test                         | run unit tests                           |
+| containers                   | build the containers                     |
+| images-clean                 | clear image build artifacts from workdir |
+| push                         | push containers to the registry          |
+| help                         | this help message                        |
+| version                      | show package version                     |
+| {build,containers,push}-ARCH | do action for specific ARCH              |
+| all-{build,containers,push}  | do action for all ARCH                   |
+| only-push-BINARY             | push just BINARY                         |
 
-* Setting `VERBOSE=1` will show additional build logging.
-* Setting `VERSION` will override the container version tag.
+- Setting `VERBOSE=1` will show additional build logging.
+- Setting `VERSION` will override the container version tag.
+- Settingn `CONTAINER_ENGINE=podman` will override the container engine. Automatically detected.
 
 ## Vulnerability patching
 
@@ -45,10 +46,11 @@ go mod vendor
 ```
 
 ## Release process
+
 Follow these steps to make changes and release a new binary.
 
 1. Make the necessary code changes and create a PR.
-2. Build and test locally (`make images-clean`; `make build`; `make containers`; `make test`). 
+2. Build and test locally (`make images-clean`; `make build`; `make containers`; `make test`).
 3. The same steps are executed via the presubmit script `presubmits.sh` which is run by the [test-infra prow job.](https://github.com/kubernetes/test-infra/blob/88cd2798f36010e071a30c9827f90e647b59fc65/config/jobs/kubernetes/sig-network/sig-network-misc.yaml#L182)
 4. Merge the PR.
 5. Cut a new release tag. We use [semantic versioning](http://semver.org) to
@@ -73,7 +75,7 @@ Follow these steps to make changes and release a new binary.
    version of the containers. Example - https://github.com/kubernetes/kubernetes/pull/106189.
    Trigger the optional [presubmit](https://github.com/kubernetes/test-infra/pull/33962) `pull-kubernetes-e2e-gci-gce-kube-dns-nodecache` and correct your PR if needed before merging.
 10. Verify the nodecache-related tabs of the test grid at https://testgrid.k8s.io/sig-network-gce for regressions caused by the new image and revert if needed.
-   
+
 ## Version compatibility
 
 There is no version compatibility requirements with Kubernetes releases. Version numbers in this repo are not related to Kubernetes versions.

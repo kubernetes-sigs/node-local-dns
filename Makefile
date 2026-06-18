@@ -40,5 +40,9 @@ VERSION ?= $(shell git describe --tags --always --dirty)
 # Set to 1 to print more verbose output from the build.
 VERBOSE ?= 0
 
+# Container engine to use. Auto-detected: docker if available, otherwise podman.
+# Override explicitly: make CONTAINER_ENGINE=podman build
+CONTAINER_ENGINE ?= $(if $(shell command -v docker 2>/dev/null),docker,podman)
+
 # Include standard build rules.
 include rules.mk
