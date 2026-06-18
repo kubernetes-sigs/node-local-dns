@@ -44,6 +44,7 @@ type Forward struct {
 	ignored []string
 
 	nextAlternateRcodes []int
+	nextOnNodata        bool
 
 	tlsConfig                  *tls.Config
 	tlsServerName              string
@@ -55,6 +56,10 @@ type Forward struct {
 	failfastUnhealthyUpstreams bool
 	failoverRcodes             []int
 	maxConnectAttempts         uint32
+
+	// Hostname resolution fields
+	resolver  []string  // custom resolver IPs for hostname TO resolution
+	toEntries []toEntry // ordered TO entries preserving config order
 
 	opts proxyPkg.Options // also here for testing
 
@@ -245,6 +250,14 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 			}
 		}
 
+		if f.nextOnNodata && f.Next != nil {
+			if ret.Rcode == dns.RcodeSuccess && isEmpty(ret) {
+				if _, ok := f.Next.(*Forward); ok {
+					return plugin.NextOrFailure(f.Name(), f.Next, ctx, w, r)
+				}
+			}
+		}
+
 		w.WriteMsg(ret)
 		return 0, nil
 	}
@@ -271,6 +284,19 @@ func (f *Forward) isAllowedDomain(name string) bool {
 
 	for _, ignore := range f.ignored {
 		if plugin.Name(ignore).Matches(name) {
+			return false
+		}
+	}
+	return true
+}
+
+func isEmpty(r *dns.Msg) bool {
+	if len(r.Answer) == 0 {
+		return true
+	}
+
+	for _, r := range r.Answer {
+		if r != nil {
 			return false
 		}
 	}
