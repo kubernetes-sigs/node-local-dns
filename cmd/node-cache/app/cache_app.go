@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/coremain"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 
@@ -269,6 +270,12 @@ func (c *CacheApp) runPeriodic() {
 // RunApp invokes the background checks and runs coreDNS as a cache
 func (c *CacheApp) RunApp() {
 	go c.runPeriodic()
+
+	// Specify plugin order. Without this, coredns falls back to its own
+	// full plugin list (vendor/.../dnsserver/zdirectives.go), which includes
+	// plugins not compiled into this binary and may differ in ordering.
+	dnsserver.Directives = directives
+
 	coremain.Run()
 	// Unlikely to reach here, if we did it is because coremain exited and the signal was not trapped.
 	clog.Errorf("Untrapped signal, tearing down")
