@@ -24,6 +24,7 @@ export IMAGES
 export REGISTRY
 export VERBOSE
 export VERSION
+export CONTAINER_ENGINE
 
 # directories which hold app source (not vendored)
 SRC_DIRS := cmd pkg
@@ -40,8 +41,16 @@ IPTIMAGE ?= registry.k8s.io/build-image/distroless-iptables:v0.8.6@sha256:4e0a77
 CONTAINER_NAME  = $(REGISTRY)/$(CONTAINER_PREFIX)-$(BINARY)-$(ARCH)
 BUILDSTAMP_NAME = $(subst :,_,$(subst /,_,$(CONTAINER_NAME))_$(VERSION))
 
-# Ensure that the docker command line supports the manifest images
-export DOCKER_CLI_EXPERIMENTAL=enabled
+# buildx is a Docker plugin; Podman builds multi-platform images natively.
+# manifest push --purge (Docker) vs --rm (Podman) serve the same purpose.
+ifeq ($(CONTAINER_ENGINE),podman)
+  CONTAINER_BUILD_CMD      := $(CONTAINER_ENGINE) build
+  MANIFEST_PUSH_PURGE_FLAG := --rm
+else
+  CONTAINER_BUILD_CMD      := $(CONTAINER_ENGINE) buildx build
+  MANIFEST_PUSH_PURGE_FLAG := --purge
+  export DOCKER_CLI_EXPERIMENTAL=enabled
+endif
 
 ALL_BINARIES += $(BINARIES)
 ALL_BINARIES += $(CONTAINER_BINARIES)
@@ -82,10 +91,10 @@ all-push: $(addprefix push-, $(ALL_ARCH))
 	@for binary in $(CONTAINER_BINARIES); do \
 		MANIFEST_IMAGE=$(REGISTRY)/$(CONTAINER_PREFIX)-$${binary} ; \
 		for arch in $(ALL_ARCH); do \
-			docker manifest create --amend $$MANIFEST_IMAGE:$(VERSION) $$MANIFEST_IMAGE-$${arch}:${VERSION} ; \
-			docker manifest annotate --arch $${arch} $$MANIFEST_IMAGE:${VERSION} $$MANIFEST_IMAGE-$${arch}:${VERSION}; \
+			$(CONTAINER_ENGINE) manifest create --amend $$MANIFEST_IMAGE:$(VERSION) $$MANIFEST_IMAGE-$${arch}:${VERSION} ; \
+			$(CONTAINER_ENGINE) manifest annotate --arch $${arch} $$MANIFEST_IMAGE:${VERSION} $$MANIFEST_IMAGE-$${arch}:${VERSION}; \
 		done ; \
-		docker manifest push --purge $$MANIFEST_IMAGE:${VERSION} ; \
+		$(CONTAINER_ENGINE) manifest push $(MANIFEST_PUSH_PURGE_FLAG) $$MANIFEST_IMAGE:${VERSION} ; \
 	done
 
 .PHONY: build
@@ -101,8 +110,8 @@ build: $(GO_BINARIES)
 # So this is a workaround where we set GOCACHE env variable, but do not use it as a volume.
 $(GO_BINARIES): build-dirs
 	@echo "building : $@"
-	@docker pull $(BUILD_IMAGE)
-	@docker run                                                            \
+	@$(CONTAINER_ENGINE) pull $(BUILD_IMAGE)
+	@$(CONTAINER_ENGINE) run                                              \
 	    --rm                                                               \
 	    --sig-proxy=true                                                   \
 	    -u $$(id -u):$$(id -g)                                             \
@@ -142,14 +151,14 @@ $(foreach BINARY,$(CONTAINER_BINARIES),$(eval $(DOCKERFILE_RULE)))
 define CONTAINER_RULE
 .$(BUILDSTAMP_NAME)-container: bin/$(ARCH)/$(BINARY)
 	@echo "container: bin/$(ARCH)/$(BINARY) ($(CONTAINER_NAME))"
-	@docker buildx build					\
+	@$(CONTAINER_BUILD_CMD)					\
 		--platform linux/$(ARCH)			\
 		$(DOCKER_BUILD_FLAGS)				\
 		-t $(CONTAINER_NAME):$(VERSION)		\
 		-f .$(BINARY)-$(ARCH)-dockerfile .	\
 		$(VERBOSE_OUTPUT)
 	@echo "$(CONTAINER_NAME):$(VERSION)" > $$@
-	@docker images -q $(CONTAINER_NAME):$(VERSION) >> $$@
+	@$(CONTAINER_ENGINE) images -q $(CONTAINER_NAME):$(VERSION) >> $$@
 endef
 $(foreach BINARY,$(CONTAINER_BINARIES),$(eval $(CONTAINER_RULE)))
 
@@ -163,7 +172,7 @@ push: $(PUSH_BUILDSTAMPS)
 
 .%-push: .%-container
 	@echo "pushing  :" $$(head -n 1 $<)
-	@docker push $$(head -n 1 $<) $(VERBOSE_OUTPUT)
+	@$(CONTAINER_ENGINE) push $$(head -n 1 $<) $(VERBOSE_OUTPUT)
 	@cat $< > $@
 
 define PUSH_RULE
@@ -181,7 +190,7 @@ $(foreach BINARY,$(CONTAINER_BINARIES),$(eval $(PUSH_RULE)))
 # So this is a workaround where we set GOCACHE env variable, but do not use it as a volume.
 .PHONY: test
 test: build-dirs
-	@docker run                                                            \
+	@$(CONTAINER_ENGINE) run                                              \
 	    --rm                                                               \
 	    --sig-proxy=true                                                   \
 	    -u $$(id -u):$$(id -g)                                             \
@@ -238,3 +247,5 @@ help:
 	@echo "  Setting VERBOSE=1 will show additional build logging."
 	@echo
 	@echo "  Setting VERSION will override the container version tag."
+	@echo
+	@echo "  Setting CONTAINER_ENGINE=podman enables Podman instead of Docker."
