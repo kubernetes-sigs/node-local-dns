@@ -64,8 +64,8 @@ type iptablesRule struct {
 
 // CacheApp contains all the config required to run node-cache.
 type CacheApp struct {
-	iptables      utiliptables.Interface
-	iptablesRules []iptablesRule
+	iptables      [2]utiliptables.Interface // indexed by ipFamily: [ipv4], [ipv6]
+	iptablesRules [2][]iptablesRule         // indexed by ipFamily: [ipv4], [ipv6]
 	params        *ConfigParams
 	netifHandle   *netif.NetifManager
 	config        *NodeCacheConfig
@@ -73,6 +73,18 @@ type CacheApp struct {
 	clusterDNSIP  net.IP
 	selfProcess   *os.Process
 }
+
+// ipFamily indexes the per-family iptables interfaces and rule sets. In a
+// dual-stack cluster node-cache listens on both an IPv4 and an IPv6 address, so
+// rules and the iptables handle used to manage them are tracked separately per
+// family.
+const (
+	ipv4 int = iota
+	ipv6
+)
+
+// ipFamilies is the fixed set of families node-cache iterates over.
+var ipFamilies = []int{ipv4, ipv6}
 
 func isLockedErr(err error) bool {
 	return strings.Contains(err.Error(), "holding the xtables lock")
@@ -104,19 +116,19 @@ func (c *CacheApp) Init() {
 	c.params.SetupIptables = setupIptables
 }
 
-// isIPv6 return if the node-cache is working in IPv6 mode
-// LocalIPs are guaranteed to have the same family
-func (c *CacheApp) isIPv6() bool {
-	if len(c.params.LocalIPs) > 0 {
-		return utilnet.IsIPv6(c.params.LocalIPs[0])
+// ipFamilyOf returns the ipFamily index (ipv4 or ipv6) for the given IP.
+func ipFamilyOf(ip net.IP) int {
+	if utilnet.IsIPv6(ip) {
+		return ipv6
 	}
-	return false
+	return ipv4
 }
 
 func (c *CacheApp) initIptables() {
 	// using the localIPStr param since we need ip strings here
 	for _, localIP := range strings.Split(c.params.LocalIPStr, ",") {
-		c.iptablesRules = append(c.iptablesRules, []iptablesRule{
+		family := ipFamilyOf(net.ParseIP(localIP))
+		c.iptablesRules[family] = append(c.iptablesRules[family], []iptablesRule{
 			// Match traffic destined for localIp:localPort and set the flows to be NOTRACKED, this skips connection tracking
 			{utiliptables.Table("raw"), utiliptables.ChainPrerouting, []string{"-p", "tcp", "-d", localIP,
 				"--dport", c.params.LocalPort, "-j", "NOTRACK", "-m", "comment", "--comment", iptablesCommentSkipConntrack}},
@@ -150,15 +162,15 @@ func (c *CacheApp) initIptables() {
 				"--sport", c.params.HealthPort, "-j", "NOTRACK", "-m", "comment", "--comment", iptablesCommentSkipConntrack}},
 		}...)
 	}
-	c.iptables = newIPTables(c.isIPv6())
-}
-
-func newIPTables(isIPv6 bool) utiliptables.Interface {
-	protocol := utiliptables.ProtocolIPv4
-	if isIPv6 {
-		protocol = utiliptables.ProtocolIPv6
+	// Only instantiate an iptables handle for a family that actually has rules,
+	// so that on a single-stack node we never invoke ip6tables (or iptables)
+	// where the corresponding binary or kernel module may be absent.
+	if len(c.iptablesRules[ipv4]) > 0 {
+		c.iptables[ipv4] = utiliptables.New(utiliptables.ProtocolIPv4)
 	}
-	return utiliptables.New(protocol)
+	if len(c.iptablesRules[ipv6]) > 0 {
+		c.iptables[ipv6] = utiliptables.New(utiliptables.ProtocolIPv6)
+	}
 }
 
 func handleIPTablesError(err error) {
@@ -182,23 +194,28 @@ func (c *CacheApp) TeardownNetworking() error {
 	}
 	var err error
 	if c.params.SetupIptables {
-		for _, rule := range c.iptablesRules {
-			exists := true
-			for exists == true {
-				// check in a loop in case the same rule got added multiple times.
-				err = c.iptables.DeleteRule(rule.table, rule.chain, rule.args...)
-				if err != nil {
-					clog.Errorf("Failed deleting iptables rule %v, error - %v", rule, err)
-					handleIPTablesError(err)
-				}
-				exists, err = c.iptables.EnsureRule(utiliptables.Prepend, rule.table, rule.chain, rule.args...)
-				if err != nil {
-					clog.Errorf("Failed checking iptables rule after deletion, rule - %v, error - %v", rule, err)
-					handleIPTablesError(err)
-				}
+		for _, family := range ipFamilies {
+			if c.iptables[family] == nil {
+				continue
 			}
-			// Delete the rule one last time since EnsureRule creates the rule if it doesn't exist
-			err = c.iptables.DeleteRule(rule.table, rule.chain, rule.args...)
+			for _, rule := range c.iptablesRules[family] {
+				exists := true
+				for exists == true {
+					// check in a loop in case the same rule got added multiple times.
+					err = c.iptables[family].DeleteRule(rule.table, rule.chain, rule.args...)
+					if err != nil {
+						clog.Errorf("Failed deleting iptables rule %v, error - %v", rule, err)
+						handleIPTablesError(err)
+					}
+					exists, err = c.iptables[family].EnsureRule(utiliptables.Prepend, rule.table, rule.chain, rule.args...)
+					if err != nil {
+						clog.Errorf("Failed checking iptables rule after deletion, rule - %v, error - %v", rule, err)
+						handleIPTablesError(err)
+					}
+				}
+				// Delete the rule one last time since EnsureRule creates the rule if it doesn't exist
+				err = c.iptables[family].DeleteRule(rule.table, rule.chain, rule.args...)
+			}
 		}
 	}
 	if c.params.SetupInterface {
@@ -209,20 +226,25 @@ func (c *CacheApp) TeardownNetworking() error {
 
 func (c *CacheApp) setupNetworking() {
 	if c.params.SetupIptables {
-		for _, rule := range c.iptablesRules {
-			exists, err := c.iptables.EnsureRule(utiliptables.Prepend, rule.table, rule.chain, rule.args...)
-			switch {
-			case exists:
-				// debug messages can be printed by including "debug" plugin in coreFile.
-				clog.Debugf("iptables rule %v for nodelocaldns already exists", rule)
+		for _, family := range ipFamilies {
+			if c.iptables[family] == nil {
 				continue
-			case err == nil:
-				clog.Infof("Added back nodelocaldns rule - %v", rule)
-				continue
-			default:
-				// iptables check/rule add failed with error since control reached here.
-				clog.Errorf("Error checking/adding iptables rule %v, error - %v", rule, err)
-				handleIPTablesError(err)
+			}
+			for _, rule := range c.iptablesRules[family] {
+				exists, err := c.iptables[family].EnsureRule(utiliptables.Prepend, rule.table, rule.chain, rule.args...)
+				switch {
+				case exists:
+					// debug messages can be printed by including "debug" plugin in coreFile.
+					clog.Debugf("iptables rule %v for nodelocaldns already exists", rule)
+					continue
+				case err == nil:
+					clog.Infof("Added back nodelocaldns rule - %v", rule)
+					continue
+				default:
+					// iptables check/rule add failed with error since control reached here.
+					clog.Errorf("Error checking/adding iptables rule %v, error - %v", rule, err)
+					handleIPTablesError(err)
+				}
 			}
 		}
 	}
