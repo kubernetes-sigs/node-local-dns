@@ -6,7 +6,7 @@ require (
 	github.com/coredns/caddy v1.1.4
 	github.com/coredns/coredns v1.14.7
 	github.com/prometheus/client_golang v1.24.1
-	github.com/prometheus/exporter-toolkit v0.17.1
+	github.com/prometheus/exporter-toolkit v0.19.0
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.12.1
 	github.com/vishvananda/netlink v1.3.1
