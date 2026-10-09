@@ -31,9 +31,17 @@ if [ -z "${VERSION}" ]; then
 fi
 
 export CGO_ENABLED=0
+export GOOS="linux"
 export GOARCH="${ARCH}"
-if [ $GOARCH == "amd64" ]; then
-    export GOBIN="$GOPATH/bin/linux_amd64"
+
+# On a native build (host arch == target arch) Go outputs to $GOPATH/bin/ by
+# default, so we redirect explicitly to match the volume-mount path used by
+# rules.mk. On a cross-compilation (e.g. arm64 host building for amd64) Go
+# already places binaries in $GOPATH/bin/linux_${GOARCH}/, so GOBIN must not
+# be set (Go rejects GOBIN during cross-compilation).
+GOHOSTARCH=$(go env GOHOSTARCH)
+if [ "${GOARCH}" == "${GOHOSTARCH}" ]; then
+    export GOBIN="$GOPATH/bin/linux_${GOARCH}"
 fi
 
 go install                                                         \
