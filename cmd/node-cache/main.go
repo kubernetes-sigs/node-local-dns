@@ -28,28 +28,9 @@ import (
 	utilnet "k8s.io/utils/net"
 
 	"github.com/coredns/caddy"
-	// blank imports to make sure the plugin code is pulled in from vendor when building node-cache image
-	_ "github.com/coredns/coredns/plugin/bind"
-	_ "github.com/coredns/coredns/plugin/bufsize"
-	_ "github.com/coredns/coredns/plugin/cache"
-	_ "github.com/coredns/coredns/plugin/debug"
-	_ "github.com/coredns/coredns/plugin/dns64"
-	_ "github.com/coredns/coredns/plugin/errors"
-	_ "github.com/coredns/coredns/plugin/forward"
-	_ "github.com/coredns/coredns/plugin/health"
-	_ "github.com/coredns/coredns/plugin/hosts"
-	_ "github.com/coredns/coredns/plugin/loadbalance"
-	_ "github.com/coredns/coredns/plugin/log"
-	_ "github.com/coredns/coredns/plugin/loop"
-	_ "github.com/coredns/coredns/plugin/metrics"
-	_ "github.com/coredns/coredns/plugin/pprof"
-	_ "github.com/coredns/coredns/plugin/reload"
-	_ "github.com/coredns/coredns/plugin/rewrite"
-	_ "github.com/coredns/coredns/plugin/template"
-	_ "github.com/coredns/coredns/plugin/timeouts"
-	_ "github.com/coredns/coredns/plugin/trace"
-	_ "github.com/coredns/coredns/plugin/whoami"
 	"sigs.k8s.io/node-local-dns/pkg/version"
+	// Plugin imports are generated into zplugin.go by directives_generate.go.
+	// Edit plugin.cfg and run `make generate` to add or remove plugins.
 )
 
 var cache *app.CacheApp
