@@ -75,9 +75,10 @@ func convertSpan(s *Span, defaultServiceName string) *otlptrace.Span {
 
 // +checklocksignore — Post-finish: reads finished span fields during payload encoding.
 func convertSpanStatus(s *Span) *otlptrace.Status {
+	message, _ := s.meta.Get(ext.ErrorMsg)
 	status := &otlptrace.Status{
 		Code:    otlptrace.Status_STATUS_CODE_UNSET,
-		Message: s.meta[ext.ErrorMsg],
+		Message: message,
 	}
 	if s.error == 1 {
 		status.Code = otlptrace.Status_STATUS_CODE_ERROR
@@ -156,7 +157,7 @@ func convertSpanKind(spanKind string) otlptrace.Span_SpanKind {
 }
 
 // +checklocksignore — Post-finish: reads finished span fields during payload encoding.
-func getSpanKind(s *Span) string { return s.meta[ext.SpanKind] }
+func getSpanKind(s *Span) string { v, _ := s.meta.Get(ext.SpanKind); return v }
 
 // -----------------------------------------------------------------------------
 // Attribute conversion (DD → OTLP KeyValue / AnyValue)
@@ -171,9 +172,22 @@ func addAttribute(attrs *[]*otlpcommon.KeyValue, key string, val *otlpcommon.Any
 	return len(*attrs) < maxAttributesCount
 }
 
+// otelIntMetricKeys are attributes the OTel semantic conventions define as integers.
+// Datadog stores numeric tags as float64, so these are re-encoded as OTLP intValue
+// rather than doubleValue to conform to the data model.
+var otelIntMetricKeys = map[string]struct{}{
+	"http.response.status_code": {},
+	"http.response.body.size":   {},
+	"http.request.body.size":    {},
+	"server.port":               {},
+	"network.peer.port":         {},
+	"network.destination.port":  {},
+	"client.port":               {},
+}
+
 // +checklocksignore — Post-finish: reads finished span fields during payload encoding.
 func convertSpanAttributes(s *Span, defaultServiceName string) []*otlpcommon.KeyValue {
-	n := len(s.meta) + len(s.metrics) + len(s.metaStruct) + 3
+	n := s.meta.Count() + len(s.metrics) + len(s.metaStruct) + 3
 	if s.service != defaultServiceName {
 		n++
 	}
@@ -193,13 +207,19 @@ func convertSpanAttributes(s *Span, defaultServiceName string) []*otlpcommon.Key
 			return attrs
 		}
 	}
-	for key, value := range s.meta {
+	for key, value := range s.meta.All() {
 		if !addAttribute(&attrs, key, otlpStringValue(value)) {
 			return attrs
 		}
 	}
 	for key, value := range s.metrics {
-		if !addAttribute(&attrs, key, otlpDoubleValue(value)) {
+		var av *otlpcommon.AnyValue
+		if _, isInt := otelIntMetricKeys[key]; isInt {
+			av = otlpIntValue(int64(value))
+		} else {
+			av = otlpDoubleValue(value)
+		}
+		if !addAttribute(&attrs, key, av) {
 			return attrs
 		}
 	}

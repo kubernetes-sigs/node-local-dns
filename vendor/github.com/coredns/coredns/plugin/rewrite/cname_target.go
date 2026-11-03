@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/coredns/coredns/plugin/pkg/upstream"
@@ -14,6 +15,8 @@ import (
 
 	"github.com/miekg/dns"
 )
+
+const maxCNAMERewriteDepth = 8
 
 // UpstreamInt wraps the Upstream API for dependency injection during testing
 type UpstreamInt interface {
@@ -30,9 +33,11 @@ type cnameTargetRule struct {
 	Upstream        UpstreamInt    // Upstream for looking up external names during the resolution process.
 }
 
-// cnameTargetRuleWithReqState is cname target rewrite rule state
+// cnameTargetRuleWithReqState pairs a request's ctx/state with the rule that
+// matched it. rule is a pointer to the shared, Corefile-parsed rule (never
+// mutated after newCNAMERule builds it)
 type cnameTargetRuleWithReqState struct {
-	rule  cnameTargetRule
+	rule  *cnameTargetRule
 	state request.Request
 	ctx   context.Context
 }
@@ -82,12 +87,20 @@ func (r *cnameTargetRuleWithReqState) RewriteResponse(res *dns.Msg, rr dns.RR) {
 	if cname.Target != fromTarget {
 		return
 	}
+
+	// Limit internal lookups that re-enter the server.
+	loop, _ := r.ctx.Value(dnsserver.LoopKey{}).(int)
+	if loop > maxCNAMERewriteDepth {
+		return
+	}
+	ctx := context.WithValue(r.ctx, dnsserver.LoopKey{}, loop+1)
+
 	// create upstream request with the new target with the same qtype
 	r.state.Req.Question[0].Name = toTarget
 	// upRes can be nil if the internal query path didn't write a response
 	// (e.g. a plugin returned a success rcode without writing, dropped the query,
 	// or the context was canceled). Guard upRes before dereferencing.
-	upRes, err := r.rule.Upstream.Lookup(r.ctx, r.state, toTarget, r.state.Req.Question[0].Qtype)
+	upRes, err := r.rule.Upstream.Lookup(ctx, r.state, toTarget, r.state.Req.Question[0].Qtype)
 	if err != nil {
 		log.Errorf("upstream lookup failed: %v", err)
 		return
@@ -168,7 +181,7 @@ func newCNAMERule(nextAction string, args ...string) (Rule, error) {
 func (r *cnameTargetRule) Rewrite(ctx context.Context, state request.Request) (ResponseRules, Result) {
 	if r != nil && len(r.rewriteType) > 0 && len(r.paramFromTarget) > 0 && len(r.paramToTarget) > 0 {
 		return ResponseRules{&cnameTargetRuleWithReqState{
-			rule:  *r,
+			rule:  r,
 			state: state,
 			ctx:   ctx,
 		}}, RewriteDone

@@ -66,8 +66,14 @@ func (r *remapStringRewriter) rewriteString(src string) string {
 	if src == r.orig {
 		return r.replacement
 	}
-	if strings.HasSuffix(src, "."+r.orig) {
-		return src[0:len(src)-len(r.orig)] + r.replacement
+	// src is a sub domain of orig when orig sits at the end of src with a label
+	// boundary right before it. Checking that boundary by index matches exactly
+	// what strings.HasSuffix(src, "."+r.orig) matches, without building the
+	// dot-prefixed string. Caching that string on the rewriter is not an option:
+	// responseRuleFor constructs a rewriter per rewritten request, so the cost
+	// would land on every request to save work on every record.
+	if i := len(src) - len(r.orig); i > 0 && src[i-1] == '.' && src[i:] == r.orig {
+		return src[:i] + r.replacement
 	}
 	return src
 }
@@ -330,8 +336,16 @@ func newNameRule(nextAction string, args ...string) (Rule, error) {
 	var err error
 	var answers ResponseRules
 	auto := false
-	if len(args) > 3 {
-		auto, answers, err = parseAnswerRules(matchType, args[3:])
+	answerStart := 3
+	withMetadata := len(args) > 3 && args[3] == "metadata"
+	if withMetadata {
+		if matchType != RegexMatch {
+			return nil, fmt.Errorf("metadata is only supported for regex name rules")
+		}
+		answerStart++
+	}
+	if len(args) > answerStart {
+		auto, answers, err = parseAnswerRules(matchType, args[answerStart:])
 		if err != nil {
 			return nil, err
 		}
@@ -350,6 +364,9 @@ func newNameRule(nextAction string, args ...string) (Rule, error) {
 	case SubstringMatch:
 		return newSubstringNameRule(nextAction, auto, rewriteQuestionFrom, rewriteQuestionTo, answers), nil
 	case RegexMatch:
+		if withMetadata {
+			return newMetadataNameRule(nextAction, auto, rewriteQuestionFrom, rewriteQuestionTo, answers)
+		}
 		rewriteQuestionFromPattern, err := isValidRegexPattern(rewriteQuestionFrom, rewriteQuestionTo)
 		if err != nil {
 			return nil, err
