@@ -16,16 +16,13 @@ package main
 import (
 	"flag"
 	"fmt"
-	"net"
 	"os"
 	"strconv"
-	"strings"
 
 	"sigs.k8s.io/node-local-dns/cmd/node-cache/app"
 
 	corednsmain "github.com/coredns/coredns/coremain"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
-	utilnet "k8s.io/utils/net"
 
 	"github.com/coredns/caddy"
 	// blank imports to make sure the plugin code is pulled in from vendor when building node-cache image
@@ -102,20 +99,12 @@ func parseAndValidateFlags() (*app.ConfigParams, error) {
 	flag.BoolVar(&params.TlsConfig.Enabled, "tls-enabled", false, "Enable TLS, defaults to false")
 	flag.Parse()
 
-	for _, ipstr := range strings.Split(params.LocalIPStr, ",") {
-		newIP := net.ParseIP(ipstr)
-		if newIP == nil {
-			return params, fmt.Errorf("invalid localip specified - %q", ipstr)
-		}
-		params.LocalIPs = append(params.LocalIPs, newIP)
+	localIPs, err := app.ParseLocalIPs(params.LocalIPStr)
+	if err != nil {
+		return params, err
 	}
+	params.LocalIPs = localIPs
 
-	// validate all the IPs have the same IP family
-	for _, ip := range params.LocalIPs {
-		if utilnet.IsIPv6(params.LocalIPs[0]) != utilnet.IsIPv6(ip) {
-			return params, fmt.Errorf("unexpected IP Family for localIP - %q, want IPv6=%v", ip, utilnet.IsIPv6(params.LocalIPs[0]))
-		}
-	}
 	// lookup specified dns port
 	f := flag.Lookup("dns.port")
 	if f == nil {
