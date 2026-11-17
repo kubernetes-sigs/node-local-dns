@@ -196,6 +196,21 @@ test: build-dirs
 	        ./build/test.sh $(SRC_DIRS)                                    \
 	    "
 
+# Generated plugin files. Make rebuilds them automatically when plugin.cfg or
+# the generator itself changes.
+PLUGIN_CFG        := cmd/node-cache/plugin.cfg
+PLUGIN_GENERATOR  := cmd/node-cache/directives_generate.go
+GENERATED_PLUGIN  := cmd/node-cache/zplugin.go cmd/node-cache/app/zdirectives_gen.go
+
+$(GENERATED_PLUGIN): $(PLUGIN_CFG) $(PLUGIN_GENERATOR)
+	cd cmd/node-cache && go run directives_generate.go
+
+.PHONY: generate
+generate: $(GENERATED_PLUGIN)
+
+# Ensure generated files are up to date before building.
+build: $(GENERATED_PLUGIN)
+
 # Miscellaneous rules
 .PHONY: version
 version:
@@ -224,6 +239,7 @@ help:
 	@echo "  all, build    build all binaries"
 	@echo "  containers    build the containers"
 	@echo "  push          push containers to the registry"
+	@echo "  generate      regenerate plugin imports and directives from cmd/node-cache/plugin.cfg"
 	@echo "  clean         clear build artifacts from workdir"
 	@echo "  help          this help message"
 	@echo "  version       show package version"

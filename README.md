@@ -13,6 +13,7 @@ This is the repository for [Kubernetes Node-Local DNS Cache](https://kubernetes.
 |containers   | build the containers |
 |images-clean | clear image build artifacts from workdir |
 |push         | push containers to the registry |
+|generate     | regenerate plugin imports and directives from `cmd/node-cache/plugin.cfg` |
 |help         | this help message |
 |version      | show package version |
 |{build,containers,push}-ARCH | do action for specific ARCH |
@@ -21,6 +22,24 @@ This is the repository for [Kubernetes Node-Local DNS Cache](https://kubernetes.
 
 * Setting `VERBOSE=1` will show additional build logging.
 * Setting `VERSION` will override the container version tag.
+
+### Adding or removing plugins
+
+Plugin selection is driven by [`cmd/node-cache/plugin.cfg`](./cmd/node-cache/plugin.cfg).
+
+** CoreDNS internal plugins ** (e.g. `cache:cache`):
+
+1. Edit `cmd/node-cache/plugin.cfg` — entries follow the `name:dirname` format used by [coredns/coredns](https://github.com/coredns/coredns/blob/master/plugin.cfg). Order does not matter; execution order is derived automatically from the vendored coredns source.
+2. Run `make generate` to regenerate `cmd/node-cache/zplugin.go` (blank imports) and `cmd/node-cache/app/zdirectives_gen.go` (directive order).
+3. Commit `plugin.cfg`, `zplugin.go`, and `zdirectives_gen.go` together.
+
+**External plugins** (e.g. `myplugin:github.com/example/myplugin`):
+
+1. Add the module: `go get github.com/example/myplugin`
+2. Vendor it: `go mod tidy && go mod vendor`
+3. Edit `cmd/node-cache/plugin.cfg` — use the full import path and place the entry after the internal plugin it should execute after.
+4. Run `make generate`.
+5. Commit `go.mod`, `go.sum`, the new vendor tree, `plugin.cfg`, `zplugin.go`, and `zdirectives_gen.go` together.
 
 ## Vulnerability patching
 
